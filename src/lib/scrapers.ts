@@ -12,6 +12,7 @@ type ScrapeSite = {
     title?: string;
     link?: string;
     location?: string;
+    company?: string;
   };
 };
 
@@ -256,12 +257,37 @@ const jobKeywords = [
   "job",
   "stelle",
   "stellen",
+  "stellenangebot",
+  "jobangebot",
+  "mitarbeiter",
+  "praktikum",
+  "lehre",
+  "lehrling",
+  "teilzeit",
+  "vollzeit",
   "karriere",
   "career",
   "vacancy",
   "position",
   "jobportal",
 ];
+
+const ignoredKeywords = [
+  "impressum",
+  "datenschutz",
+  "privacy",
+  "agb",
+  "cookie",
+  "newsletter",
+  "kontakt",
+  "login",
+  "registrieren",
+  "sign in",
+  "sign up",
+];
+
+const cleanText = (value: string) =>
+  value.replace(/\s+/g, " ").replace(/\u00a0/g, " ").trim();
 
 const normalizeLocation = (value: string) => {
   const lowered = value.toLowerCase();
@@ -321,11 +347,12 @@ const parseAnchors = (html: string, baseUrl: string): ExtractedItem[] => {
 
   anchors.each((_, element) => {
     const href = $(element).attr("href");
-    const text = $(element).text().replace(/\s+/g, " ").trim();
+    const text = cleanText($(element).text());
     if (!href || text.length < 4) return;
     const url = toAbsoluteUrl(href, baseUrl);
-    if (!url) return;
+    if (!url || url === baseUrl || url.endsWith("#")) return;
     const lowered = `${text} ${href}`.toLowerCase();
+    if (ignoredKeywords.some((keyword) => lowered.includes(keyword))) return;
     if (!jobKeywords.some((keyword) => lowered.includes(keyword))) return;
     results.push({ title: text, url });
   });
@@ -349,14 +376,19 @@ const parseBySelector = (
       : $(element);
     const linkElement = selector.link
       ? $(element).find(selector.link)
-      : titleElement;
-    const title = titleElement.text().replace(/\s+/g, " ").trim();
-    const href = linkElement.attr("href");
-    if (!title || !href) return;
+      : titleElement.find("a[href]").first().length > 0
+        ? titleElement.find("a[href]").first()
+        : titleElement;
+    const title = cleanText(titleElement.text());
+    const href =
+      linkElement.attr("href") ?? $(element).find("a[href]").first().attr("href");
+    if (!title || !href || title.length < 4) return;
     const url = toAbsoluteUrl(href, baseUrl);
-    if (!url) return;
+    if (!url || url === baseUrl || url.endsWith("#")) return;
+    const lowered = `${title} ${href}`.toLowerCase();
+    if (ignoredKeywords.some((keyword) => lowered.includes(keyword))) return;
     const location = selector.location
-      ? $(element).find(selector.location).text().replace(/\s+/g, " ").trim()
+      ? cleanText($(element).find(selector.location).text())
       : undefined;
     results.push({ title, url, location });
   });

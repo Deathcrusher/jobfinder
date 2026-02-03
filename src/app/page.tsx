@@ -15,7 +15,11 @@ const heroFilters: JobTag[] = [
   "ohne-kundenkontakt",
 ];
 
-type AgentJob = Job & { agentScore?: number };
+type AgentJob = Job & {
+  agentScore?: number;
+  agentMatches?: string[];
+  agentRemoteBoost?: number;
+};
 
 export default function Home() {
   const [activeTags, setActiveTags] = useState<JobTag[]>([]);
@@ -212,6 +216,16 @@ export default function Home() {
                         Agent-Score: {Math.round(job.agentScore ?? 0)}
                       </span>
                     ) : null}
+                    {job.agentMatches && job.agentMatches.length > 0 ? (
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-slate-300">
+                        Matches: {job.agentMatches.join(", ")}
+                      </span>
+                    ) : null}
+                    {job.agentRemoteBoost && job.agentRemoteBoost > 0 ? (
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-slate-400">
+                        Remote bevorzugt
+                      </span>
+                    ) : null}
                     <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-slate-400">
                       {job.isRemote ? "Remote" : "Vor Ort"}
                     </span>
@@ -296,9 +310,9 @@ export default function Home() {
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">
               <p className="font-semibold text-white">Agent-Logik</p>
               <p className="mt-2 text-xs text-slate-300">
-                Der Agent priorisiert Jobs mit passenden Stichwörtern und blendet
-                ausgeschlossene Begriffe aus. Remote-Präferenz beeinflusst die
-                Sortierung.
+                Der Agent bewertet Treffer höher, wenn Keywords in Titel/Tags
+                auftauchen, und blendet ausgeschlossene Begriffe aus. Remote-Präferenz
+                beeinflusst die Sortierung zusätzlich.
               </p>
             </div>
           </div>

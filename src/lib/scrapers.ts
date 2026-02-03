@@ -6,6 +6,7 @@ type ScrapeSite = {
   source: JobSource;
   urls: string[];
   limit: number;
+  proxyFallback?: boolean;
   selectors?: {
     item: string;
     title?: string;
@@ -28,6 +29,7 @@ const sites: ScrapeSite[] = [
       "https://jobs.tt.com/jobs/innsbruck?page=2",
     ],
     limit: 40,
+    proxyFallback: true,
     selectors: {
       item: "[data-testid='job-card'], .job-card, .jobs-item",
       title: "[data-testid='job-title'], .job-card__title, h2",
@@ -70,6 +72,7 @@ const sites: ScrapeSite[] = [
       "https://jobs.oehweb.at/jobs?page=2",
     ],
     limit: 30,
+    proxyFallback: true,
     selectors: {
       item: ".job-listing, .job, .job-card",
       title: "h2, h3, .job-title",
@@ -361,18 +364,60 @@ const parseBySelector = (
   return results;
 };
 
+const proxyPrefixes = ["https://r.jina.ai/http://", "https://r.jina.ai/https://"];
+
+const buildFetchTargets = (site: ScrapeSite) =>
+  site.urls.flatMap((url) => {
+    const base = [{ url, baseUrl: url }];
+    if (!site.proxyFallback) return base;
+    return base.concat(
+      proxyPrefixes.map((prefix) => ({
+        url: `${prefix}${url.replace(/^https?:\/\//, "")}`,
+        baseUrl: url,
+      }))
+    );
+  });
+
+const fetchHtml = async (
+  site: ScrapeSite
+): Promise<{ html: string; baseUrl: string }[]> => {
+  const targets = buildFetchTargets(site);
+  const results: { html: string; baseUrl: string }[] = [];
+
+  for (const target of targets) {
+    try {
+      const response = await fetch(target.url, {
+        next: { revalidate: 3600 },
+        headers: {
+          "user-agent":
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language": "de-AT,de;q=0.9,en;q=0.8",
+          referer: target.baseUrl,
+        },
+      });
+      if (!response.ok) {
+        console.warn(
+          `[scraper] ${site.source} fetch failed ${response.status} for ${target.url}`
+        );
+        continue;
+      }
+      const html = await response.text();
+      if (!html.trim()) continue;
+      results.push({ html, baseUrl: target.baseUrl });
+    } catch (error) {
+      console.warn(`[scraper] ${site.source} fetch error`, error);
+    }
+  }
+
+  return results;
+};
+
 const scrapeSite = async (site: ScrapeSite): Promise<Job[]> => {
   try {
-    const htmlPages = await Promise.all(
-      site.urls.map(async (url) => {
-        const response = await fetch(url, { next: { revalidate: 3600 } });
-        if (!response.ok) return null;
-        return response.text();
-      })
-    );
-    const extracted = htmlPages.flatMap((html, index) => {
-      if (!html) return [];
-      const baseUrl = site.urls[index] ?? site.urls[0];
+    const htmlPages = await fetchHtml(site);
+    const extracted = htmlPages.flatMap(({ html, baseUrl }) => {
       const bySelector = parseBySelector(html, baseUrl, site.selectors);
       return bySelector.length > 0 ? bySelector : parseAnchors(html, baseUrl);
     });

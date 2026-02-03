@@ -11,7 +11,8 @@ export type JobSource =
   | "LinkedIn"
   | "ÖH Jobbörse"
   | "AMS"
-  | "Company";
+  | "Company"
+  | "Remotive";
 
 export type Job = {
   id: string;
@@ -56,86 +57,123 @@ export const jobFilters: { id: JobTag; label: string; description: string }[] = 
 
 const innsbruckLocations = ["Innsbruck", "Innsbruck-Land", "Tirol"];
 
-export const sampleJobs: Job[] = [
-  {
-    id: "oh-001",
-    title: "Marketing Assistenz (m/w/d)",
-    company: "ÖH Innsbruck",
-    location: "Innsbruck",
-    isRemote: false,
-    postedAt: "2024-08-30",
-    source: "ÖH Jobbörse",
-    tags: ["quereinsteiger", "ohne-vorkenntnisse", "ohne-kundenkontakt"],
-    url: "https://oeh-jobboerse.at/",
-    summary:
-      "Unterstützung im Social-Media-Team mit klaren Prozessen und internen Aufgaben.",
-  },
-  {
-    id: "ka-021",
-    title: "Backoffice Coordinator (m/w/d)",
-    company: "Bergblick GmbH",
-    location: "Innsbruck",
-    isRemote: false,
-    postedAt: "2024-08-28",
-    source: "Karriere.at",
-    tags: ["quereinsteiger", "ohne-vorkenntnisse", "ohne-kundenkontakt"],
-    url: "https://www.karriere.at/",
-    summary:
-      "Datenpflege, Terminorganisation und interne Kommunikation.",
-  },
-  {
-    id: "ss-314",
-    title: "Junior QA Tester (m/w/d)",
-    company: "Alpen Digital",
-    location: "Remote",
-    isRemote: true,
-    postedAt: "2024-08-27",
-    source: "StepStone",
-    tags: ["quereinsteiger", "home-office", "ohne-vorkenntnisse"],
-    url: "https://www.stepstone.at/",
-    summary:
-      "Software-Tests mit Checklisten, Remote-Onboarding inklusive.",
-  },
-  {
-    id: "li-088",
-    title: "Content Managerin Beauty (m/w/d)",
-    company: "Glow Studio",
-    location: "Innsbruck",
-    isRemote: false,
-    postedAt: "2024-08-26",
-    source: "LinkedIn",
-    tags: ["beauty", "quereinsteiger", "ohne-kundenkontakt"],
-    url: "https://www.linkedin.com/jobs/",
-    summary:
-      "Pflege von Beauty-Content, Produktdaten und internen Kampagnen.",
-  },
-  {
-    id: "ams-449",
-    title: "Remote Sachbearbeitung (m/w/d)",
-    company: "Tirol Service",
-    location: "Remote",
-    isRemote: true,
-    postedAt: "2024-08-25",
-    source: "AMS",
-    tags: ["home-office", "quereinsteiger", "ohne-kundenkontakt"],
-    url: "https://jobs.ams.at/",
-    summary:
-      "Interne Vorgänge dokumentieren und Abläufe nach Vorlage prüfen.",
-  },
-  {
-    id: "co-777",
-    title: "Beauty Produktdatenpflege (m/w/d)",
-    company: "Alpen Beauty Tech",
-    location: "Remote",
-    isRemote: true,
-    postedAt: "2024-08-24",
-    source: "Company",
-    tags: ["beauty", "home-office", "ohne-vorkenntnisse"],
-    url: "https://example.com/",
-    summary:
-      "Produktdaten nach Vorlagen pflegen, komplett remote.",
-  },
-];
+type RemotiveResponse = {
+  jobs: RemotiveJob[];
+};
+
+type RemotiveJob = {
+  id: number;
+  title: string;
+  company_name: string;
+  candidate_required_location: string;
+  publication_date: string;
+  tags: string[];
+  job_url: string;
+  description: string;
+  category: string;
+};
+
+const remotiveEndpoint = "https://remotive.com/api/remote-jobs";
+
+const stripHtml = (value: string) =>
+  value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+const buildSummary = (job: RemotiveJob) => {
+  const cleaned = stripHtml(job.description);
+  if (!cleaned) {
+    return `${job.title} bei ${job.company_name}.`;
+  }
+  return cleaned.length > 200 ? `${cleaned.slice(0, 197)}…` : cleaned;
+};
+
+const deriveTags = (job: RemotiveJob, isRemote: boolean): JobTag[] => {
+  const tagSet = new Set<JobTag>();
+  const combined = [
+    job.title,
+    job.company_name,
+    job.category,
+    ...job.tags,
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  if (isRemote) {
+    tagSet.add("home-office");
+  }
+
+  if (
+    combined.includes("junior") ||
+    combined.includes("entry") ||
+    combined.includes("trainee") ||
+    combined.includes("assistant")
+  ) {
+    tagSet.add("quereinsteiger");
+    tagSet.add("ohne-vorkenntnisse");
+  }
+
+  if (
+    combined.includes("backoffice") ||
+    combined.includes("data") ||
+    combined.includes("qa") ||
+    combined.includes("accounting") ||
+    combined.includes("finance") ||
+    combined.includes("analytics") ||
+    combined.includes("engineering")
+  ) {
+    tagSet.add("ohne-kundenkontakt");
+  }
+
+  if (
+    combined.includes("beauty") ||
+    combined.includes("cosmetic") ||
+    combined.includes("wellness") ||
+    combined.includes("skincare")
+  ) {
+    tagSet.add("beauty");
+  }
+
+  return Array.from(tagSet);
+};
+
+const normalizeLocation = (value: string) =>
+  value.toLowerCase().includes("remote") ||
+  value.toLowerCase().includes("anywhere")
+    ? "Remote"
+    : value;
+
+export const getJobs = async (): Promise<Job[]> => {
+  try {
+    const response = await fetch(remotiveEndpoint, {
+      next: { revalidate: 3600 },
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = (await response.json()) as RemotiveResponse;
+
+    return data.jobs.map((job) => {
+      const location = normalizeLocation(job.candidate_required_location);
+      const isRemote = location === "Remote";
+      return {
+        id: `remotive-${job.id}`,
+        title: job.title,
+        company: job.company_name,
+        location,
+        isRemote,
+        postedAt: job.publication_date,
+        source: "Remotive",
+        tags: deriveTags(job, isRemote),
+        url: job.job_url,
+        summary: buildSummary(job),
+      } satisfies Job;
+    });
+  } catch (error) {
+    console.error("Failed to load jobs", error);
+    return [];
+  }
+};
 
 export const matchesLocationRules = (job: Job) => {
   if (job.isRemote) return true;

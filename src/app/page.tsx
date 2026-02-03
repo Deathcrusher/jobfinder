@@ -11,7 +11,7 @@ const heroFilters: JobTag[] = [
 ];
 
 export default function Home() {
-  const [activeTags, setActiveTags] = useState<JobTag[]>(heroFilters);
+  const [activeTags, setActiveTags] = useState<JobTag[]>([]);
   const [jobsData, setJobsData] = useState<Job[]>([]);
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function Home() {
   }, []);
 
   const jobs = useMemo(
-    () => filterJobs(jobsData, activeTags),
+    () => filterJobs(jobsData, activeTags, "any"),
     [activeTags, jobsData]
   );
 
@@ -89,7 +89,8 @@ export default function Home() {
             <div className="space-y-2">
               <h2 className="text-lg font-semibold text-white">Filter</h2>
               <p className="text-sm text-slate-300">
-                Wähle die passenden Kriterien für Connie. Mehrere Filter kombinieren.
+                Wähle passende Kriterien für Connie. Bei mehreren Filtern zählt
+                mindestens einer.
               </p>
             </div>
             <div className="space-y-4">

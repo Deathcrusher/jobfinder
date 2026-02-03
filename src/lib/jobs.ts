@@ -275,13 +275,21 @@ export const matchesLocationRules = (job: Job) => {
   return innsbruckLocations.some((place) => job.location.includes(place));
 };
 
-export const filterJobs = (jobs: Job[], activeTags: JobTag[]) => {
+export type TagMatchStrategy = "any" | "all";
+
+export const filterJobs = (
+  jobs: Job[],
+  activeTags: JobTag[],
+  matchStrategy: TagMatchStrategy = "any"
+) => {
   return jobs
     .filter(matchesLocationRules)
     .filter((job) =>
       activeTags.length === 0
         ? true
-        : activeTags.every((tag) => job.tags.includes(tag))
+        : matchStrategy === "all"
+          ? activeTags.every((tag) => job.tags.includes(tag))
+          : activeTags.some((tag) => job.tags.includes(tag))
     )
     .sort(
       (a, b) =>

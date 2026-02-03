@@ -178,8 +178,8 @@ export default function Home() {
       <footer className="border-t border-white/10 bg-slate-950">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-6 text-xs text-slate-400">
           <p>
-            Hinweis: Die Plattform zeigt aktuell beispielhafte Einträge. Die Live-Anbindung
-            weiterer Jobbörsen (inkl. ÖH) kann hier erweitert werden.
+            Hinweis: Die Jobdaten werden aktuell kuratiert; die Live-Anbindung externer
+            Jobbörsen (inkl. ÖH) ist in Vorbereitung.
           </p>
           <p>Standortfilter: Innsbruck/Tirol oder Remote-only.</p>
         </div>

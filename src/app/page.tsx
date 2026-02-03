@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  parseKeywords,
+  rankJobsForAgent,
+  type AgentPreferences,
+} from "@/lib/agent";
 import { filterJobs, jobFilters, type Job, type JobTag } from "@/lib/jobs";
 
 const heroFilters: JobTag[] = [
@@ -10,9 +15,16 @@ const heroFilters: JobTag[] = [
   "ohne-kundenkontakt",
 ];
 
+type AgentJob = Job & { agentScore?: number };
+
 export default function Home() {
   const [activeTags, setActiveTags] = useState<JobTag[]>([]);
   const [jobsData, setJobsData] = useState<Job[]>([]);
+  const [agentEnabled, setAgentEnabled] = useState(true);
+  const [agentInclude, setAgentInclude] = useState("quereinsteiger, assistenz");
+  const [agentExclude, setAgentExclude] = useState("vertrieb, call center");
+  const [agentRemotePreference, setAgentRemotePreference] =
+    useState<AgentPreferences["preferRemote"]>("any");
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -31,10 +43,22 @@ export default function Home() {
     fetchJobs();
   }, []);
 
-  const jobs = useMemo(
-    () => filterJobs(jobsData, activeTags, "any"),
-    [activeTags, jobsData]
-  );
+  const jobs = useMemo<AgentJob[]>(() => {
+    const baseJobs = filterJobs(jobsData, activeTags, "any");
+    if (!agentEnabled) return baseJobs;
+    return rankJobsForAgent(baseJobs, {
+      includeKeywords: parseKeywords(agentInclude),
+      excludeKeywords: parseKeywords(agentExclude),
+      preferRemote: agentRemotePreference,
+    });
+  }, [
+    activeTags,
+    agentEnabled,
+    agentExclude,
+    agentInclude,
+    agentRemotePreference,
+    jobsData,
+  ]);
 
   const toggleTag = (tag: JobTag) => {
     setActiveTags((prev) =>
@@ -183,6 +207,11 @@ export default function Home() {
                         {jobFilters.find((filter) => filter.id === tag)?.label}
                       </span>
                     ))}
+                    {job.agentScore !== undefined ? (
+                      <span className="rounded-full bg-teal-500/10 px-3 py-1 text-xs text-teal-100">
+                        Agent-Score: {Math.round(job.agentScore ?? 0)}
+                      </span>
+                    ) : null}
                     <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-slate-400">
                       {job.isRemote ? "Remote" : "Vor Ort"}
                     </span>
@@ -195,6 +224,85 @@ export default function Home() {
             </div>
           </section>
         </section>
+        <section className="mt-10 grid gap-6 rounded-3xl border border-white/10 bg-white/5 p-6 lg:grid-cols-[1.1fr_1.5fr]">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.2em] text-teal-200">
+                Job-Agent
+              </p>
+              <h2 className="text-xl font-semibold text-white">
+                Dein persönlicher AI-Job-Agent
+              </h2>
+              <p className="text-sm text-slate-300">
+                Lass Connie Jobs nach deinem Profil filtern und priorisieren.
+                Schlüsselwörter werden in Titel, Summary, Tags und Standort gesucht.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={agentEnabled}
+                onChange={(event) => setAgentEnabled(event.target.checked)}
+                className="h-4 w-4 rounded border-white/30 bg-slate-900"
+              />
+              Agent aktivieren
+            </label>
+            <div className="space-y-2 text-xs text-slate-400">
+              <p>Beispiele: assistenz, kundensupport, marketing, quereinsteiger.</p>
+              <p>Ausschlüsse: vertrieb, cold calling, call center.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-semibold text-white">
+                Wunschrollen & Keywords
+              </label>
+              <textarea
+                value={agentInclude}
+                onChange={(event) => setAgentInclude(event.target.value)}
+                rows={2}
+                className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none focus:border-teal-400"
+                placeholder="z. B. assistenz, office, quereinsteiger"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-semibold text-white">Ausschlüsse</label>
+              <textarea
+                value={agentExclude}
+                onChange={(event) => setAgentExclude(event.target.value)}
+                rows={2}
+                className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none focus:border-teal-400"
+                placeholder="z. B. vertrieb, call center"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-white">
+                Remote-Präferenz
+              </label>
+              <select
+                value={agentRemotePreference}
+                onChange={(event) =>
+                  setAgentRemotePreference(
+                    event.target.value as AgentPreferences["preferRemote"]
+                  )
+                }
+                className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100 outline-none focus:border-teal-400"
+              >
+                <option value="any">Egal</option>
+                <option value="remote">Remote bevorzugt</option>
+                <option value="onsite">Vor Ort bevorzugt</option>
+              </select>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">
+              <p className="font-semibold text-white">Agent-Logik</p>
+              <p className="mt-2 text-xs text-slate-300">
+                Der Agent priorisiert Jobs mit passenden Stichwörtern und blendet
+                ausgeschlossene Begriffe aus. Remote-Präferenz beeinflusst die
+                Sortierung.
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer className="border-t border-white/10 bg-slate-950">
@@ -204,8 +312,8 @@ export default function Home() {
             Jobportalen (z. B. Jobs TT, Karriere.at, ÖH).
           </p>
           <p>
-            Standortfilter: Innsbruck/Tirol oder Remote-only. Optionales KI-Ranking,
-            sobald ein OPENAI_API_KEY hinterlegt ist.
+            Standortfilter: Innsbruck/Tirol oder Remote-only. Der Job-Agent ergänzt
+            das Ranking nach deinem Profil, sobald er aktiviert ist.
           </p>
         </div>
       </footer>

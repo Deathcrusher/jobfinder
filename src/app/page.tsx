@@ -199,10 +199,13 @@ export default function Home() {
       <footer className="border-t border-white/10 bg-slate-950">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-6 text-xs text-slate-400">
           <p>
-            Hinweis: Die Plattform zeigt Live-Remote-Jobs (Remotive) und kann um weitere
-            Jobbörsen (inkl. ÖH) erweitert werden.
+            Hinweis: Die Plattform lädt Jobs von Remotive, Arbeitnow und Tiroler
+            Jobportalen (z. B. Jobs TT, Karriere.at, ÖH).
           </p>
-          <p>Standortfilter: Innsbruck/Tirol oder Remote-only.</p>
+          <p>
+            Standortfilter: Innsbruck/Tirol oder Remote-only. Optionales KI-Ranking,
+            sobald ein OPENAI_API_KEY hinterlegt ist.
+          </p>
         </div>
       </footer>
     </div>

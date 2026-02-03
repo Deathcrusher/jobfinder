@@ -12,7 +12,21 @@ export type JobSource =
   | "ÖH Jobbörse"
   | "AMS"
   | "Company"
-  | "Remotive";
+  | "Remotive"
+  | "Arbeitnow"
+  | "Jobs TT"
+  | "Tirolerjobs"
+  | "Willkommen Tirol"
+  | "Uni Innsbruck"
+  | "MCI Career Center"
+  | "Industrie Tirol"
+  | "Startup Tirol"
+  | "Tirol GV"
+  | "Innsbruck GV"
+  | "IKB"
+  | "Tirol Kliniken"
+  | "MetaJob"
+  | "Indeed";
 
 export type Job = {
   id: string;
@@ -25,6 +39,7 @@ export type Job = {
   tags: JobTag[];
   url: string;
   summary: string;
+  rankScore?: number;
 };
 
 export const jobFilters: { id: JobTag; label: string; description: string }[] = [
@@ -73,7 +88,24 @@ type RemotiveJob = {
   category: string;
 };
 
+type ArbeitnowResponse = {
+  data: ArbeitnowJob[];
+};
+
+type ArbeitnowJob = {
+  slug: string;
+  title: string;
+  company_name: string;
+  location: string;
+  created_at: string;
+  tags: string[];
+  description: string;
+  remote: boolean;
+  url: string;
+};
+
 const remotiveEndpoint = "https://remotive.com/api/remote-jobs";
+const arbeitnowEndpoint = "https://www.arbeitnow.com/api/job-board-api";
 
 const stripHtml = (value: string) =>
   value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -141,19 +173,28 @@ const normalizeLocation = (value: string) =>
     ? "Remote"
     : value;
 
+const normalizeDate = (value: string) => {
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : value;
+};
+
 export const getJobs = async (): Promise<Job[]> => {
   try {
-    const response = await fetch(remotiveEndpoint, {
-      next: { revalidate: 3600 },
-    });
+    const [{ scrapeJobs }, remotiveResponse, arbeitnowResponse] = await Promise.all([
+      import("@/lib/scrapers"),
+      fetch(remotiveEndpoint, { next: { revalidate: 3600 } }),
+      fetch(arbeitnowEndpoint, { next: { revalidate: 3600 } }),
+    ]);
 
-    if (!response.ok) {
-      return [];
-    }
+    const remotiveData = remotiveResponse.ok
+      ? ((await remotiveResponse.json()) as RemotiveResponse)
+      : { jobs: [] };
 
-    const data = (await response.json()) as RemotiveResponse;
+    const arbeitnowData = arbeitnowResponse.ok
+      ? ((await arbeitnowResponse.json()) as ArbeitnowResponse)
+      : { data: [] };
 
-    return data.jobs.map((job) => {
+    const remotiveJobs = remotiveData.jobs.map((job) => {
       const location = normalizeLocation(job.candidate_required_location);
       const isRemote = location === "Remote";
       return {
@@ -162,13 +203,67 @@ export const getJobs = async (): Promise<Job[]> => {
         company: job.company_name,
         location,
         isRemote,
-        postedAt: job.publication_date,
+        postedAt: normalizeDate(job.publication_date),
         source: "Remotive",
         tags: deriveTags(job, isRemote),
         url: job.job_url,
         summary: buildSummary(job),
       } satisfies Job;
     });
+
+    const arbeitnowJobs = arbeitnowData.data.map((job) => {
+      const location = normalizeLocation(job.location);
+      const isRemote = job.remote || location === "Remote";
+      return {
+        id: `arbeitnow-${job.slug}`,
+        title: job.title,
+        company: job.company_name,
+        location: isRemote ? "Remote" : location,
+        isRemote,
+        postedAt: normalizeDate(job.created_at),
+        source: "Arbeitnow",
+        tags: deriveTags(
+          {
+            id: 0,
+            title: job.title,
+            company_name: job.company_name,
+            candidate_required_location: location,
+            publication_date: job.created_at,
+            tags: job.tags,
+            job_url: job.url,
+            description: job.description,
+            category: job.tags[0] ?? "General",
+          },
+          isRemote
+        ),
+        url: job.url,
+        summary: buildSummary({
+          id: 0,
+          title: job.title,
+          company_name: job.company_name,
+          candidate_required_location: location,
+          publication_date: job.created_at,
+          tags: job.tags,
+          job_url: job.url,
+          description: job.description,
+          category: job.tags[0] ?? "General",
+        }),
+      } satisfies Job;
+    });
+
+    const scrapedJobs = await scrapeJobs();
+    const combinedJobs = [...remotiveJobs, ...arbeitnowJobs, ...scrapedJobs];
+    const uniqueJobs = Array.from(
+      new Map(
+        combinedJobs.map((job) => [
+          `${job.title}-${job.company}-${job.url}`,
+          job,
+        ])
+      ).values()
+    );
+
+    const { rankJobs } = await import("@/lib/ranking");
+    return await rankJobs(uniqueJobs);
   } catch (error) {
     console.error("Failed to load jobs", error);
     return [];
@@ -190,6 +285,7 @@ export const filterJobs = (jobs: Job[], activeTags: JobTag[]) => {
     )
     .sort(
       (a, b) =>
+        (b.rankScore ?? 0) - (a.rankScore ?? 0) ||
         new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
     );
 };

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { filterJobs, jobFilters, sampleJobs, type JobTag } from "@/lib/jobs";
+import { useEffect, useMemo, useState } from "react";
+import { filterJobs, jobFilters, type Job, type JobTag } from "@/lib/jobs";
 
 const heroFilters: JobTag[] = [
   "quereinsteiger",
@@ -12,8 +12,29 @@ const heroFilters: JobTag[] = [
 
 export default function Home() {
   const [activeTags, setActiveTags] = useState<JobTag[]>(heroFilters);
+  const [jobsData, setJobsData] = useState<Job[]>([]);
 
-  const jobs = useMemo(() => filterJobs(sampleJobs, activeTags), [activeTags]);
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        const response = await fetch("/api/jobs");
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as Job[];
+        setJobsData(data);
+      } catch (error) {
+        console.error("Failed to load jobs", error);
+      }
+    };
+
+    fetchJobs();
+  }, []);
+
+  const jobs = useMemo(
+    () => filterJobs(jobsData, activeTags),
+    [activeTags, jobsData]
+  );
 
   const toggleTag = (tag: JobTag) => {
     setActiveTags((prev) =>
@@ -178,8 +199,8 @@ export default function Home() {
       <footer className="border-t border-white/10 bg-slate-950">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-6 text-xs text-slate-400">
           <p>
-            Hinweis: Die Plattform zeigt aktuell beispielhafte Einträge. Die Live-Anbindung
-            weiterer Jobbörsen (inkl. ÖH) kann hier erweitert werden.
+            Hinweis: Die Plattform zeigt Live-Remote-Jobs (Remotive) und kann um weitere
+            Jobbörsen (inkl. ÖH) erweitert werden.
           </p>
           <p>Standortfilter: Innsbruck/Tirol oder Remote-only.</p>
         </div>

@@ -13,6 +13,12 @@ type ScrapeSite = {
   };
 };
 
+type ExtractedItem = {
+  title: string;
+  url: string;
+  location?: string;
+};
+
 const sites: ScrapeSite[] = [
   { source: "Jobs TT", url: "https://jobs.tt.com" },
   { source: "Tirolerjobs", url: "https://tirolerjobs.at" },
@@ -108,10 +114,10 @@ const toAbsoluteUrl = (href: string, baseUrl: string) => {
   }
 };
 
-const parseAnchors = (html: string, baseUrl: string) => {
+const parseAnchors = (html: string, baseUrl: string): ExtractedItem[] => {
   const $ = cheerio.load(html);
   const anchors = $("a[href]");
-  const results: { title: string; url: string }[] = [];
+  const results: ExtractedItem[] = [];
 
   anchors.each((_, element) => {
     const href = $(element).attr("href");
@@ -127,11 +133,15 @@ const parseAnchors = (html: string, baseUrl: string) => {
   return results;
 };
 
-const parseBySelector = (html: string, baseUrl: string, selector: ScrapeSite["selectors"]) => {
+const parseBySelector = (
+  html: string,
+  baseUrl: string,
+  selector: ScrapeSite["selectors"]
+): ExtractedItem[] => {
   if (!selector) return [];
   const $ = cheerio.load(html);
   const items = $(selector.item);
-  const results: { title: string; url: string; location?: string }[] = [];
+  const results: ExtractedItem[] = [];
 
   items.each((_, element) => {
     const titleElement = selector.title

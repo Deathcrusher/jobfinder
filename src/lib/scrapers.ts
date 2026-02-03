@@ -289,6 +289,8 @@ const ignoredKeywords = [
 const cleanText = (value: string) =>
   value.replace(/\s+/g, " ").replace(/\u00a0/g, " ").trim();
 
+const hasLetters = (value: string) => /[\p{L}]/u.test(value);
+
 const normalizeLocation = (value: string) => {
   const lowered = value.toLowerCase();
   if (remoteKeywords.some((keyword) => lowered.includes(keyword))) {
@@ -348,7 +350,7 @@ const parseAnchors = (html: string, baseUrl: string): ExtractedItem[] => {
   anchors.each((_, element) => {
     const href = $(element).attr("href");
     const text = cleanText($(element).text());
-    if (!href || text.length < 4) return;
+    if (!href || text.length < 4 || !hasLetters(text)) return;
     const url = toAbsoluteUrl(href, baseUrl);
     if (!url || url === baseUrl || url.endsWith("#")) return;
     const lowered = `${text} ${href}`.toLowerCase();
@@ -382,11 +384,12 @@ const parseBySelector = (
     const title = cleanText(titleElement.text());
     const href =
       linkElement.attr("href") ?? $(element).find("a[href]").first().attr("href");
-    if (!title || !href || title.length < 4) return;
+    if (!title || !href || title.length < 4 || !hasLetters(title)) return;
     const url = toAbsoluteUrl(href, baseUrl);
     if (!url || url === baseUrl || url.endsWith("#")) return;
     const lowered = `${title} ${href}`.toLowerCase();
     if (ignoredKeywords.some((keyword) => lowered.includes(keyword))) return;
+    if (!jobKeywords.some((keyword) => lowered.includes(keyword))) return;
     const location = selector.location
       ? cleanText($(element).find(selector.location).text())
       : undefined;
